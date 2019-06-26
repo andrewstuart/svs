@@ -14,7 +14,7 @@
 
 package main
 
-import "test/svs/svs/cmd"
+import "astuart.co/svs/cmd"
 
 func main() {
 	cmd.Execute()
