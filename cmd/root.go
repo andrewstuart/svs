@@ -25,8 +25,10 @@ func cur(rc io.Reader) semver.Version {
 	for err == nil {
 		bs, _, err = br.ReadLine()
 		for _, f := range strings.Fields(string(bs)) {
-			sv := semver.MustParse(strings.TrimPrefix(f, "v"))
-			vs = append(vs, sv)
+			sv, err := semver.Parse(strings.TrimPrefix(f, "v"))
+			if err == nil {
+				vs = append(vs, sv)
+			}
 		}
 	}
 
