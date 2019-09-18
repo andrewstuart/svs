@@ -4,19 +4,24 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"path"
 	"sort"
 	"strings"
 
 	"github.com/blang/semver"
 	homedir "github.com/mitchellh/go-homedir"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
 var cfgFile string
 
-func cur(rc io.Reader) semver.Version {
+func cur(rc io.Reader) (*semver.Version, error) {
 	var vs semver.Versions
 	br := bufio.NewReader(os.Stdin)
 
@@ -33,7 +38,27 @@ func cur(rc io.Reader) semver.Version {
 	}
 
 	sort.Sort(vs)
-	return vs[len(vs)-1]
+	return &vs[len(vs)-1], err
+}
+
+func fromGit() (*semver.Version, error) {
+	repo, err := git.PlainOpen(".")
+	if err != nil {
+		return nil, errors.Wrap(err, "git open failed")
+	}
+
+	t, err := repo.Tags()
+	if err != nil {
+		return nil, errors.Wrap(err, "git tags failed")
+	}
+	var top semver.Version
+	t.ForEach(func(r *plumbing.Reference) error {
+		if next, err := semver.Parse(strings.TrimPrefix(path.Base(r.Name().String()), "v")); err == nil && next.GE(top) {
+			top = next
+		}
+		return nil
+	})
+	return &top, nil
 }
 
 // rootCmd represents the base command when called without any subcommands
@@ -41,7 +66,19 @@ var rootCmd = &cobra.Command{
 	Use:   "svs",
 	Short: "semver sort",
 	Run: func(c *cobra.Command, args []string) {
-		fmt.Print(cur(os.Stdin))
+		if len(args) > 0 && args[0] == "-" {
+			v, err := cur(os.Stdin)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Print(v)
+			return
+		}
+		t, err := fromGit()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Print(t)
 	},
 }
 

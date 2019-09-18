@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -11,9 +12,15 @@ import (
 var nextCmd = &cobra.Command{
 	Use:   "next",
 	Short: "increment the version",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		v := cur(os.Stdin)
+		v, err := fromGit()
+		if len(args) > 1 && args[1] == "-" {
+			v, err = cur(os.Stdin)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
 		switch args[0] {
 		case "major":
 			v.Major++
