@@ -53,7 +53,11 @@ func fromGit() (*semver.Version, error) {
 	}
 	var top semver.Version
 	t.ForEach(func(r *plumbing.Reference) error {
-		if next, err := semver.Parse(strings.TrimPrefix(path.Base(r.Name().String()), "v")); err == nil && next.GE(top) {
+		next, err := semver.Parse(strings.TrimPrefix(path.Base(r.Name().String()), "v"))
+		if err != nil {
+			return nil
+		}
+		if next.GE(top) && len(next.Pre) == 0 {
 			top = next
 		}
 		return nil
