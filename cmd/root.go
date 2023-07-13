@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blang/semver"
+	"github.com/blang/semver/v4"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -19,10 +19,48 @@ import (
 	"gopkg.in/src-d/go-git.v4/plumbing"
 )
 
+func sortStrings(strs []string) []string {
+	type Version struct {
+		semver semver.Version
+		orig   string
+	}
+
+	var versions []Version
+
+	for _, str := range strs {
+		v, err := semver.ParseTolerant(str)
+		if err != nil {
+			// Ignore if it is not a semver.
+			continue
+		}
+
+		versions = append(
+			versions,
+			Version{
+				semver: v,
+				orig:   str,
+			},
+		)
+	}
+
+	// Sort versions.
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].semver.LT(versions[j].semver)
+	})
+
+	// Prepare result slice with original strings sorted by semver.
+	var res []string
+	for _, v := range versions {
+		res = append(res, v.orig)
+	}
+
+	return res
+}
+
 var cfgFile string
 
-func cur(rc io.Reader) (*semver.Version, error) {
-	var vs semver.Versions
+func cur(rc io.Reader) (string, error) {
+	var vs []string
 	br := bufio.NewReader(os.Stdin)
 
 	var err error
@@ -30,39 +68,34 @@ func cur(rc io.Reader) (*semver.Version, error) {
 	for err == nil {
 		bs, _, err = br.ReadLine()
 		for _, f := range strings.Fields(string(bs)) {
-			sv, err := semver.Parse(strings.TrimPrefix(f, "v"))
-			if err == nil {
-				vs = append(vs, sv)
-			}
+			vs = append(vs, f)
 		}
 	}
+	if err == io.EOF {
+		err = nil
+	}
 
-	sort.Sort(vs)
-	return &vs[len(vs)-1], err
+	strs := sortStrings(vs)
+	return strs[len(strs)-1], err
 }
 
-func fromGit() (*semver.Version, error) {
+func fromGit() (string, error) {
 	repo, err := git.PlainOpen(".")
 	if err != nil {
-		return nil, errors.Wrap(err, "git open failed")
+		return "", errors.Wrap(err, "git open failed")
 	}
 
 	t, err := repo.Tags()
 	if err != nil {
-		return nil, errors.Wrap(err, "git tags failed")
+		return "", errors.Wrap(err, "git tags failed")
 	}
-	var top semver.Version
+	var tags []string
 	t.ForEach(func(r *plumbing.Reference) error {
-		next, err := semver.Parse(strings.TrimPrefix(path.Base(r.Name().String()), "v"))
-		if err != nil {
-			return nil
-		}
-		if next.GE(top) && len(next.Pre) == 0 {
-			top = next
-		}
+		tags = append(tags, path.Base(r.Name().String()))
 		return nil
 	})
-	return &top, nil
+	sorted := sortStrings(tags)
+	return sorted[len(sorted)-1], nil
 }
 
 // rootCmd represents the base command when called without any subcommands

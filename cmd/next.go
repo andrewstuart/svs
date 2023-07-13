@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
+	"github.com/blang/semver/v4"
 	"github.com/spf13/cobra"
 )
 
@@ -14,13 +16,17 @@ var nextCmd = &cobra.Command{
 	Short: "increment the version",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		v, err := fromGit()
+		ver, err := fromGit()
 		if len(args) > 1 && args[1] == "-" {
-			v, err = cur(os.Stdin)
+			ver, err = cur(os.Stdin)
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		vPref := strings.HasPrefix(ver, "v")
+		v, _ := semver.ParseTolerant(ver)
+
 		switch args[0] {
 		case "major":
 			v.Major++
@@ -31,6 +37,10 @@ var nextCmd = &cobra.Command{
 			v.Patch = 0
 		case "patch":
 			v.Patch++
+		}
+		if vPref {
+			fmt.Println("v" + v.String())
+			return
 		}
 		fmt.Print(v)
 	},
